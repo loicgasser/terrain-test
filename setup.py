@@ -4,6 +4,7 @@ from setuptools import setup
 
 requires = [
         'ipython',
+        'numpy',
     ]
 
 setup(name='3d-forge',
