@@ -14,6 +14,7 @@ requires = [
         'numpy',
         'sqlalchemy',
         'shapely',
+        'pyproj',
     ]
 
 setup(name='3d-forge',
