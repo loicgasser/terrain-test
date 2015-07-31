@@ -28,10 +28,11 @@ logger = getLogger(config, __name__, suffix='db_%s' % timestamp())
 # Create pickable object
 class PopulateFeaturesArguments:
 
-    def __init__(self, engineURL, modelIndex, shpFile):
+    def __init__(self, engineURL, modelIndex, shpFile, autotransform):
         self.engineURL = engineURL
         self.modelIndex = modelIndex
         self.shpFile = shpFile
+        self.autoTransform = autotransform
 
 
 def populateFeatures(args):
@@ -46,6 +47,10 @@ def populateFeatures(args):
         if not os.path.exists(shpFile):
             logger.error('[%s]: Shapefile %s does not exists' % (pid, shpFile))
             sys.exit(1)
+
+        # When autotransform is enabled, we try to detect crs and transform
+        # it to wgs84 using ogr2ogr cmdline tool
+        # if args.autoTransform > 0:
 
         count = 1
         shp = ShpToGDALFeatures(shpFile)
@@ -95,6 +100,8 @@ class DB:
     def __init__(self, configFile):
         config = ConfigParser.RawConfigParser()
         config.read(configFile)
+
+        self.autoTransform = config.get('Data', 'autotransform')
 
         self.serverConf = DB.Server(config)
         self.adminConf = DB.Admin(config)
@@ -257,7 +264,8 @@ class DB:
                 featuresArgs.append(PopulateFeaturesArguments(
                     self.userEngine.url,
                     i,
-                    shp
+                    shp,
+                    self.autoTransform
                 ))
 
         def init_worker():

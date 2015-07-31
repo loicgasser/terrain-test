@@ -11,7 +11,7 @@ import os
 import pyproj
 
 
-DEBUG = False
+DEBUG = True
 
 _here = os.path.dirname(os.path.abspath(__file__))
 proj_datadir = os.path.join(_here, '../proj_data')
