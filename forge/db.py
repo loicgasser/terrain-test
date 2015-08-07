@@ -4,11 +4,9 @@ import os
 import datetime
 import time
 import subprocess
-import multiprocessing
 import sys
 import ConfigParser
 import sqlalchemy
-import signal
 from geoalchemy2 import WKTElement
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.exc import ProgrammingError
@@ -18,6 +16,7 @@ from forge.lib.logs import getLogger
 from forge.lib.shapefile_utils import ShpToGDALFeatures
 from forge.lib.helpers import BulkInsert, timestamp, cleanup
 from forge.models.tables import Base, modelsPyramid
+from forge.lib.poolmanager import PoolManager
 
 
 config = ConfigParser.RawConfigParser()
@@ -332,32 +331,12 @@ class DB:
                     True if reproject == '1' else False
                 ))
 
-        def initWorker():
-            signal.signal(signal.SIGINT, signal.SIG_IGN)
+        pm = PoolManager()
 
-        pool = multiprocessing.Pool(multiprocessing.cpu_count(), initWorker)
-        async = pool.map_async(populateFeatures, iterable=featuresArgs)
+        pm.process(featuresArgs, populateFeatures, 1)
 
-        try:
-            while not async.ready():
-                time.sleep(3)
-        except KeyboardInterrupt:
-            logger.info('Keyboard interupt recieved, terminating workers...')
-            pool.terminate()
-            pool.join()
-        except Exception as e:
-            logger.error('An error occured while populating the tables with shapefiles: %s' % e)
-            logger.error('Terminating workers...')
-            pool.terminate()
-            pool.join()
-            raise Exception(e)
-        else:
-            logger.info('All jobs have been completed.')
-            logger.info('Closing processes...')
-            pool.close()
-            pool.join()
-            tend = time.time()
-            logger.info('All tables have been created. It took %s' % str(datetime.timedelta(seconds=tend - tstart)))
+        tend = time.time()
+        logger.info('All tables have been created. It took %s' % str(datetime.timedelta(seconds=tend - tstart)))
 
     def dropDatabase(self):
         logger.info('Action: dropDatabase()')

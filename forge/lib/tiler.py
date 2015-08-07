@@ -4,7 +4,6 @@ import time
 import datetime
 import ConfigParser
 import multiprocessing
-import signal
 import os
 from sqlalchemy.sql import and_
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -21,16 +20,16 @@ from forge.lib.topology import TerrainTopology
 from forge.lib.global_geodetic import GlobalGeodetic
 from forge.lib.collapse_geom import processRingCoordinates
 from forge.lib.logs import getLogger
+from forge.lib.poolmanager import PoolManager
 
 
-NUMBER_POOL_PROCESSES = multiprocessing.cpu_count()
 # Init logging
 dbConfig = ConfigParser.RawConfigParser()
 dbConfig.read('database.cfg')
 logger = getLogger(dbConfig, __name__, suffix=timestamp())
 
 
-def is_inside(tile, bounds):
+def isInside(tile, bounds):
     if tile[0] >= bounds[0] and tile[1] >= bounds[1] and tile[2] <= bounds[2] and tile[3] <= bounds[3]:
         return True
     return False
@@ -46,31 +45,20 @@ def grid(bounds, zoomLevels, fullonly):
         for tileX in xrange(tileMinX, tileMaxX + 1):
             for tileY in xrange(tileMinY, tileMaxY + 1):
                 tilebounds = geodetic.TileBounds(tileX, tileY, tileZ)
-                if fullonly == 0 or is_inside(tilebounds, bounds):
+                if fullonly == 0 or isInside(tilebounds, bounds):
                     yield (tilebounds, (tileX, tileY, tileZ))
 
 # shared counter
 tilecount = multiprocessing.Value('i', 0)
 skipcount = multiprocessing.Value('i', 0)
-# per process counter
-count = 0
-
-# Worker processes won't recieve KeyboradInterrupts. It's parents
-# responsibility to handle those (mainly Ctlr-C)
 
 
-def initWorker():
-    logger.info('Starting process id: %s' % multiprocessing.current_process().pid)
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-
-def worker(job):
-    global count
+def createTile(tile):
     session = None
     pid = os.getpid()
 
     try:
-        (bounds, tileXYZ, t0, bucket) = job
+        (bounds, tileXYZ, t0, bucket) = tile
         # Prepare models
         db = DB('database.cfg')
         session = sessionmaker()(bind=db.userEngine)
@@ -144,19 +132,17 @@ def worker(job):
             writeToS3(bucket, bucketKey, compressedFile, model.__tablename__)
             tend = time.time()
             tilecount.value += 1
-            count += 1
             val = tilecount.value
             total = val + skipcount.value
             if val % 10 == 0:
-                logger.info('The last tile address written in S3 was %s, and contained %s rings.' % (bucketKey, len(rings)))
-                logger.info('[%s] It took %s to create %s tiles on S3. (total processed: %s)' % (pid, str(datetime.timedelta(seconds=tend - t0)), val, total))
+                logger.info('[%s ]Last tile %s (%s rings). %s to write %s tiles. (total processed: %s)' % (pid, bucketKey, len(rings), str(datetime.timedelta(seconds=tend - t0)), val, total))
 
         else:
             skipcount.value += 1
             val = skipcount.value
             total = val + tilecount.value
             # One should write an empyt tile
-            logger.info('[%s] Skipping %s because no features found for this tile (%s skipped from %s total)' % (pid, bucketKey, val, total))
+            logger.info('[%s] Skipping %s (%s) because no features found for this tile (%s skipped from %s total)' % (pid, bucketKey, bounds, val, total))
 
     except Exception as e:
         logger.error(e)
@@ -169,7 +155,7 @@ def worker(job):
     return 0
 
 
-class Jobs:
+class Tiles:
 
     def __init__(self, tmsConfig, t0):
         self.t0 = t0
@@ -192,31 +178,11 @@ class Jobs:
             yield (bounds, tileXYZ, self.t0, bucket)
 
 
-class Chunks:
-
-    def __init__(self, jobs):
-        self.itr = iter(jobs)
-
-    def nextX(self, N):
-        res = []
-        count = 0
-        try:
-            while count < N:
-                n = self.itr.next()
-                res.append(n)
-                count += 1
-        except StopIteration:
-            logger.info('last chunks reached')
-            pass
-        return res
-
-
 class TilerManager:
 
     def __init__(self, configFile):
         tmsConfig = ConfigParser.RawConfigParser()
         tmsConfig.read(configFile)
-        self.multiProcessing = int(tmsConfig.get('General', 'multiProcessing'))
         self.chunks = int(tmsConfig.get('General', 'chunks'))
         self.tmsConfig = tmsConfig
 
@@ -226,59 +192,34 @@ class TilerManager:
         tilecount.value = 0
         skipcount.value = 0
 
-        jobs = Jobs(self.tmsConfig, self.t0)
+        tiles = Tiles(self.tmsConfig, self.t0)
 
-        if self.multiProcessing > 0:
-            pool = multiprocessing.Pool(NUMBER_POOL_PROCESSES, initWorker)
+        pm = PoolManager()
 
-            chunker = Chunks(jobs)
+        useChunks = self.chunks
+        nbTiles = self.numOfTiles()
+        tilesPerProc = int(nbTiles / pm.numOfProcesses())
+        if tilesPerProc < useChunks:
+            useChunks = tilesPerProc
+        if useChunks < 1:
+            useChunks = 1
 
-            chunks = chunker.nextX(self.chunks)
-            bail = False
-            while len(chunks) > 0 and not bail:
-                logger.info('Processing %s jobs...' % str(len(chunks)))
-                async = pool.map_async(worker, chunks, 1)
-                try:
-                    while not async.ready():
-                        time.sleep(3)
-                except KeyboardInterrupt:
-                    logger.info('Keyboard interupt recieved, terminating workers...')
-                    pool.terminate()
-                    pool.join()
-                    bail = True
-                except Exception as e:
-                    logger.error('Error while generating the tiles: %s' % e)
-                    logger.error('Terminating workers...')
-                    pool.terminate()
-                    pool.join()
-                    raise Exception(e)
-                logger.info('Getting next jobs')
-                chunks = chunker.nextX(self.chunks)
-            if not bail:
-                logger.info('All jobs have been completed.')
-                logger.info('Closing processes...')
-                pool.close()
-                pool.join()
-        else:
-            for j in jobs:
-                try:
-                    worker(j)
-                except Exception as e:
-                    logger.error('An error occured while generating the tile: %s' % e)
-                    raise Exception(e)
+        logger.info('Starting creation of %s tiles (%s per chunk)' % (nbTiles, useChunks))
+        pm.process(tiles, createTile, useChunks)
 
         tend = time.time()
         logger.info('It took %s to create %s tiles (%s were skipped)' % (
             str(datetime.timedelta(seconds=tend - self.t0)), tilecount.value, skipcount.value))
 
-    def stats(self):
+    def _stats(self, withDb=True):
         self.t0 = time.time()
+        total = 0
 
         msg = '\n'
-        jobs = Jobs(self.tmsConfig, self.t0)
+        tiles = Tiles(self.tmsConfig, self.t0)
         geodetic = GlobalGeodetic(True)
-        bounds = (jobs.minLon, jobs.minLat, jobs.maxLon, jobs.maxLat)
-        zooms = range(jobs.tileMinZ, jobs.tileMaxZ + 1)
+        bounds = (tiles.minLon, tiles.minLat, tiles.maxLon, tiles.maxLat)
+        zooms = range(tiles.tileMinZ, tiles.tileMaxZ + 1)
 
         db = DB('database.cfg')
         self.DBSession = scoped_session(sessionmaker(bind=db.userEngine))
@@ -286,11 +227,13 @@ class TilerManager:
         for i in xrange(0, len(zooms)):
             zoom = zooms[i]
             model = modelsPyramid.getModelByZoom(zoom)
-            nbObjects = self.DBSession.query(model).filter(model.bboxIntersects(bounds)).count()
+            nbObjects = None
+            if withDb:
+                nbObjects = self.DBSession.query(model).filter(model.bboxIntersects(bounds)).count()
             tileMinX, tileMinY = geodetic.LonLatToTile(bounds[0], bounds[1], zoom)
             tileMaxX, tileMaxY = geodetic.LonLatToTile(bounds[2], bounds[3], zoom)
             # Fast approach, but might not be fully correct
-            if jobs.fullonly == 1:
+            if tiles.fullonly == 1:
                 tileMinX += 1
                 tileMinY += 1
                 tileMaxX -= 1
@@ -299,10 +242,11 @@ class TilerManager:
             xCount = tileMaxX - tileMinX + 1
             yCount = tileMaxY - tileMinY + 1
             nbTiles = xCount * yCount
+            total += nbTiles
             pointA = transformCoordinate('POINT(%s %s)' % (tileBounds[0], tileBounds[1]), 4326, 21781).GetPoints()[0]
             pointB = transformCoordinate('POINT(%s %s)' % (tileBounds[2], tileBounds[3]), 4326, 21781).GetPoints()[0]
             length = c2d.distance(pointA, pointB)
-            if jobs.fullonly == 1:
+            if tiles.fullonly == 1:
                 msg += 'WARNING: stats are approximative because fullonly is activated!\n'
             msg += 'At zoom %s:\n' % zoom
             msg += 'We expect %s tiles overall\n' % nbTiles
@@ -312,8 +256,20 @@ class TilerManager:
             msg += '%s rows over Y\n' % yCount
             msg += '\n'
             msg += 'A tile side is around %s meters long\n' % int(round(length))
-            if nbTiles > 0:
+            if nbTiles > 0 and nbObjects is not None:
                 msg += 'We have an average of about %s triangles per tile\n' % int(round(nbObjects / nbTiles))
             msg += '\n'
 
+        return (total, msg)
+
+    def numOfTiles(self):
+        (total, msg) = self._stats(False)
+        return total
+
+    def stats(self):
+        (total, msg) = self._stats(True)
+        logger.info(msg)
+
+    def statsNoDb(self):
+        (total, msg) = self._stats(False)
         logger.info(msg)

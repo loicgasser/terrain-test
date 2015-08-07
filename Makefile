@@ -26,6 +26,7 @@ help:
 	@echo "- listtiles          List tiles in S3 bucket using a prefix (usage: make listtiles PREFIX=12/)"
 	@echo "- tmspyramid         Create the TMS pyramid based on the config file tms.cfg"
 	@echo "- tmsstats           Provide statistics about the TMS pyramid"
+	@echo "- tmsstatsnodb       Provide statistics about the TMS pyramid, without db stats"
 	@echo "- clean              Clean all generated files and folders"
 	@echo
 	@echo "Variables:"
@@ -102,6 +103,10 @@ tmspyramid:
 .PHONY: tmsstats
 tmsstats:
 	$(PYTHON_CMD) forge/scripts/tms_writer.py stats
+
+.PHONY: tmsstatsnodb
+tmsstatsnodb:
+	$(PYTHON_CMD) forge/scripts/tms_writer.py statsnodb
 
 .PHONY: clean
 clean:

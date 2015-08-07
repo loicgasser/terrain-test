@@ -41,6 +41,8 @@ def main():
         tiler.create()
     elif command == 'stats':
         tiler.stats()
+    elif command == 'statsnodb':
+        tiler.statsNoDb()
     else:
         error("unknown command '%(command)s'" % {'command': command}, 4, usage=usage)
 
