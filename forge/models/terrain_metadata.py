@@ -54,11 +54,11 @@ class TerrainMetadata:
             attribution  = kwargs.get('attribution', None),
             scheme       = kwargs.get('scheme', 'tms'),
             tiles        = kwargs.get('tiles', [
-              "//terrain0.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
-              "//terrain1.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
-              "//terrain2.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
-              "//terrain3.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
-              "//terrain4.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}"
+                "//terrain0.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
+                "//terrain1.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
+                "//terrain2.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
+                "//terrain3.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}",
+                "//terrain4.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/{z}/{x}/{y}.terrain?v={version}"
             ]),
             minzoom      = self.tileMinZoom,
             maxzoom      = self.tileMaxZoom,

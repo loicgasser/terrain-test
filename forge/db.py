@@ -108,8 +108,8 @@ def populateFeatures(args):
             # add shapefile path to dict
             # self.shpFilePath
             bulk.add(dict(
-                the_geom=WKTElement(polygon.ExportToWkt(), 4326)
-                , shapefilepath=shpFile
+                the_geom=WKTElement(polygon.ExportToWkt(), 4326),
+                shapefilepath=shpFile
             ))
             count += 1
         bulk.commit()

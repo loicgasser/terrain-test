@@ -9,17 +9,17 @@ bucketpath: 1.0.0/ch.swisstopo.terrain.3d/default/20151231/4326/
 maxChunks: 50
 
 [Extent]
-minLon: 8.366
-maxLon: 10.694
-minLat: 45.798
-maxLat: 46.898
+minLon: 5.86725126512748
+maxLon: 10.9209100671547
+minLat: 45.8026860136571
+maxLat: 47.8661652478939
 # fullonly: 0 -> inludes all tiles that intersect, even partly, with extent
 # fullonly: 1 -> include only tiles that fully intersect with extent
 fullonly: 0
 
 [Zooms]
 tileMinZ: 8
-tileMaxZ: 18
+tileMaxZ: 17
 
 [8]
 tablename: dhm25_64m
@@ -31,25 +31,22 @@ tablename: bl_128m
 tablename: bl_64m
 
 [11]
-tablename: bl_64m
-
-[12]
 tablename: bl_32m
 
-[13]
+[12]
 tablename: bl_16m
 
-[14]
+[13]
 tablename: bl_8m
 
-[15]
+[14]
 tablename: bl_4m
 
-[16]
+[15]
 tablename: bl_2m
 
-[17]
+[16]
 tablename: bl_1m
 
-[18]
+[17]
 tablename: bl_0_5m
