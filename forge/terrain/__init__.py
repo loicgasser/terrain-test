@@ -8,8 +8,8 @@ from collections import OrderedDict
 from forge.terrain.topology import TerrainTopology
 from forge.lib.bounding_sphere import BoundingSphere
 import forge.lib.horizon_occlusion_point as occ
+from forge.lib.oct_encoding import octEncode, octDecode
 from forge.lib.helpers import zigZagDecode, zigZagEncode, transformCoordinate
-from forge.lib.llh_ecef import LLH2ECEF
 from forge.lib.decoders import unpackEntry, unpackIndices, decodeIndices, packEntry, packIndices, encodeIndices
 
 MAX = 32767.0
@@ -76,10 +76,19 @@ class TerrainTile:
         ['northIndices', 'I']
     ])
 
+    ExtensionHeader = OrderedDict([
+        ['extensionId', 'B'],
+        ['extensionLength', 'I']
+    ])
+
+    OctEncodedVertexNormals = OrderedDict([
+        ['xy', 'B']
+    ])
+
     BYTESPLIT = 65636
 
     # Coordinates are given in lon/lat WSG84
-    def __init__(self, west=None, east=None, south=None, north=None):
+    def __init__(self, west=None, east=None, south=None, north=None, lightning=False):
         self._west = west if west is not None else -1.0
         self._east = east if east is not None else 1.0
         self._south = south if south is not None else -1.0
@@ -105,6 +114,10 @@ class TerrainTile:
         self.eastI = []
         self.northI = []
 
+        # Extension header
+        self.lightning = lightning
+        self.vLight = []
+
     def __str__(self):
 
         msg = 'Header: %s' % self.header
@@ -125,8 +138,9 @@ class TerrainTile:
         # output coordinates
         msg += '\nCoordinates in EPSG %s ----------------------------\n' % self.targetEPSG
         msg += '\n%s' % self.getVerticesCoordinates(epsg=self.targetEPSG)
-
         msg += '\nNumber of triangles: %s' % (len(self.indices) / 3)
+        # extension header
+        msg += '\nUnit vectors for lighting: %s' % self.vLight
         return msg
 
     def getVerticesCoordinates(self, epsg=4326):
@@ -176,7 +190,7 @@ class TerrainTile:
                 self._alts.append(p.GetZ())
 
     def fromFile(self, filePath, west, east, south, north):
-        self.__init__(west, east, south, north)
+        self.__init__(west, east, south, north, self.lightning)
         with open(filePath, 'rb') as f:
             # Header
             for k, v in TerrainTile.quantizedMeshHeader.iteritems():
@@ -222,6 +236,20 @@ class TerrainTile:
 
             northIndicesCount = unpackEntry(f, meta['northVertexCount'])
             self.northI = unpackIndices(f, northIndicesCount, meta['northIndices'])
+
+            if self.lightning:
+                # One byte of padding
+                # Light extension header
+                meta = TerrainTile.ExtensionHeader
+                extensionId = unpackEntry(f, meta['extensionId'])
+                if extensionId == 1:
+                    extensionLength = unpackEntry(f, meta['extensionLength'])
+                    # Consider padding of 2 bits
+                    f.read(2)
+                    for i in xrange(0, (extensionLength / 2) - 1):
+                        x = unpackEntry(f, TerrainTile.OctEncodedVertexNormals['xy'])
+                        y = unpackEntry(f, TerrainTile.OctEncodedVertexNormals['xy'])
+                        self.vLight.append(octDecode(x, y))
 
             data = f.read(1)
             if data:
@@ -295,6 +323,22 @@ class TerrainTile:
         for ni in self.northI:
             f.write(packEntry(meta['northIndices'], ni))
 
+        # Extension header for light
+        if len(self.vLight) > 0:
+            # Add 2 bytes of padding
+            f.write(packEntry('B', 1))
+            f.write(packEntry('B', 1))
+            meta = TerrainTile.ExtensionHeader
+            # Extension header ID is 1 for lightening
+            f.write(packEntry(meta['extensionId'], 1))
+            # Unsigned char size len is 1
+            f.write(packEntry(meta['extensionLength'], 2 * vertexCount))
+            metaV = TerrainTile.OctEncodedVertexNormals
+            for i in xrange(0, vertexCount - 1):
+                x, y = octEncode(self.vLight[i])
+                f.write(packEntry(metaV['xy'], x))
+                f.write(packEntry(metaV['xy'], y))
+
     def toShapefile(self, filePath, epsg=4326):
         if not filePath.endswith('.shp'):
             raise Exception('Wrong file extension')
@@ -350,39 +394,24 @@ class TerrainTile:
             self._south = topology.minLat
             self._north = topology.maxLat
 
-        llh2ecef = lambda x: LLH2ECEF(x[0], x[1], x[2])
-        ecefCoords = map(llh2ecef, topology.vertices)
         bSphere = BoundingSphere()
-        bSphere.fromPoints(ecefCoords)
+        bSphere.fromPoints(topology.cartesianVertices)
 
-        ecefMinX = float('inf')
-        ecefMinY = float('inf')
-        ecefMinZ = float('inf')
-        ecefMaxX = float('-inf')
-        ecefMaxY = float('-inf')
-        ecefMaxZ = float('-inf')
+        ecefMinX = topology.ecefMinX
+        ecefMinY = topology.ecefMinY
+        ecefMinZ = topology.ecefMinZ
+        ecefMaxX = topology.ecefMaxX
+        ecefMaxY = topology.ecefMaxY
+        ecefMaxZ = topology.ecefMaxZ
 
-        for coord in ecefCoords:
-            if coord[0] < ecefMinX:
-                ecefMinX = coord[0]
-            if coord[1] < ecefMinY:
-                ecefMinY = coord[1]
-            if coord[2] < ecefMinZ:
-                ecefMinZ = coord[2]
-            if coord[0] > ecefMaxX:
-                ecefMaxX = coord[0]
-            if coord[1] > ecefMaxY:
-                ecefMaxY = coord[1]
-            if coord[2] > ecefMaxZ:
-                ecefMaxZ = coord[2]
-
+        # Center of the bounding box 3d (TODO verify)
         centerCoords = [
             ecefMinX + (ecefMaxX - ecefMinX) * 0.5,
             ecefMinY + (ecefMaxY - ecefMinY) * 0.5,
             ecefMinZ + (ecefMaxZ - ecefMinZ) * 0.5
         ]
 
-        occlusionPCoords = occ.fromPoints(ecefCoords, bSphere)
+        occlusionPCoords = occ.fromPoints(topology.cartesianVertices, bSphere)
 
         for k, v in TerrainTile.quantizedMeshHeader.iteritems():
             if k == 'centerX':
@@ -447,3 +476,8 @@ class TerrainTile:
                 self.southI.append(indice)
             elif lat == self._north and indice not in self.northI:
                 self.northI.append(indice)
+
+        # Lighting extension header
+        if topology.lightning:
+            self.lightning = True
+            self.vLight = topology.verticesUnitVectors

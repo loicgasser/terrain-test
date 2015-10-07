@@ -51,7 +51,7 @@ To clone use the --recursive option to get all submodules.
 
 ### Copy a file to S3 from command line
 
-    aws --profile tms3d_filestorage s3 cp layer.json  s3://tms3d.geo.admin.ch/
+    aws --profile tms3d_filestorage s3 cp layer.json  s3://tms3d.geo.admin.ch/xxx/layer.json
 
 ## Create 3d-tiling instance
 

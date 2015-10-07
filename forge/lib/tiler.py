@@ -146,7 +146,7 @@ def createTile(tile):
             clippedGeometry.label('clip')
         ).filter(model.bboxIntersects(bounds))
 
-        terrainTopo = TerrainTopology()
+        terrainTopo = TerrainTopology(lightning=True)
         for q in query:
             coords = list(to_shape(q.clip).exterior.coords)
             if q.id in cornerPts:
@@ -161,7 +161,7 @@ def createTile(tile):
             except Exception as e:
                 msg = '[%s] --------- ERROR ------- occured while collapsing non triangular shapes\n' % pid
                 msg += '[%s]: %s' % (pid, e)
-                logger.error(msg)
+                logger.error(msg, exc_info=True)
                 raise Exception(e)
             # Redundant coord has been remove already
             for vertices in rings:
@@ -197,7 +197,7 @@ def createTile(tile):
                 pid, bucketKey, bounds, val, total))
 
     except Exception as e:
-        logger.error(e)
+        logger.error(e, exc_info=True)
         raise Exception(e)
     finally:
         if session is not None:
@@ -219,7 +219,7 @@ def scanTerrain(tMeta, tile, session, tilecount):
         except NoResultFound as e:
             tMeta.removeTile(tileXYZ[0], tileXYZ[1], tileXYZ[2])
     except Exception as e:
-        logger.error(e)
+        logger.error(e, exc_info=True)
         raise Exception(e)
 
     tend = time.time()
@@ -433,7 +433,7 @@ class TilerManager:
                 str(datetime.timedelta(seconds=tend - t0)), tilecount))
         except Exception as e:
             logger.error('An error occured during layer.json creation')
-            logger.error('%s' % e)
+            logger.error('%s' % e, exc_info=True)
             raise Exception(e)
         finally:
             session.close_all()

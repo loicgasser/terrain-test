@@ -11,3 +11,4 @@ logging.cfg
 apache/testapp.conf
 tmp/*
 forge_*.log
+logging.cfg

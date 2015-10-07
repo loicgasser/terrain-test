@@ -49,7 +49,7 @@ class TerrainMetadata:
         self.meta = dict(
             tilejson     = kwargs.get('tilejson', '2.1.0'),
             name         = kwargs.get('name', None),
-            description  = kwargs.get('version', '2.0.0'),
+            description  = kwargs.get('description', 'Swisstopo terrain service'),
             format       = kwargs.get('format', 'quantized-mesh-1.0'),
             attribution  = kwargs.get('attribution', None),
             scheme       = kwargs.get('scheme', 'tms'),
@@ -65,8 +65,9 @@ class TerrainMetadata:
             bounds       = kwargs.get('bounds', [-180, -90, 180, 90]),
             projection   = kwargs.get('projection', 'EPSG:4326'),
             available    = kwargs.get('available', self.available),
-            version      = kwargs.get('version', '1.0.0')
-
+            version      = kwargs.get('version', '1.16389.0'),
+            # vertexnormals is depreciated
+            extensions   = kwargs.get('extensions', ['vertexnormals', 'octvertexnormals'])
         )
 
         self._initPyramidMetadata()

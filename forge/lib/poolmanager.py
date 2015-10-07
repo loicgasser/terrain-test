@@ -35,7 +35,7 @@ class PoolManager:
             self.logger.info('Keyboard interupt recieved, terminating workers...')
             self._abort()
         except Exception as e:
-            self.logger.error('Error while processing: %s' % e)
+            self.logger.error('Error while processing: %s' % e, exc_info=True)
             self._abort()
             raise Exception(e)
         self._pool.join()
