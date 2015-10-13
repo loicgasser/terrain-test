@@ -3,18 +3,21 @@
 import math
 import numpy as np
 from osgeo import ogr
+from forge.lib.llh_ecef import LLH2ECEF
 
 
 class TerrainTopology(object):
 
-    def __init__(self, features=[]):
+    def __init__(self, features=[], hasLighting=False):
 
         if not isinstance(features, list):
             raise TypeError('Please provide a list of GDAL features')
 
         self.features = features
+        self.hasLighting = hasLighting
 
         self.vertices = []
+        self.cartesianVertices = []
         self.faces = []
         self.verticesLookup = {}
 
@@ -53,13 +56,20 @@ class TerrainTopology(object):
             lookupKey = ','.join([str(vertex[0]), str(vertex[1]), str(vertex[2])])
             faceIndex = self._lookupVertexIndex(lookupKey)
             if faceIndex is not None:
+                # Sometimes we can have triangles with zero area (due to unfortunate clipping)
+                # In that case skip them
+                if faceIndex in face:
+                    break
                 face.append(faceIndex)
             else:
                 self.vertices.append(vertex)
+                self.cartesianVertices.append(
+                    LLH2ECEF(vertex[0], vertex[1], vertex[2]))
                 faceIndex = len(self.vertices) - 1
                 self.verticesLookup[lookupKey] = faceIndex
                 face.append(faceIndex)
-        self.faces.append(face)
+        if len(face) == 3:
+            self.faces.append(face)
 
     """
     Builds a terrain topology from a list of GDAL features.
@@ -86,7 +96,10 @@ class TerrainTopology(object):
 
     def create(self):
         self.vertices = np.array(self.vertices, dtype='float')
+        self.cartesianVertices = np.array(self.cartesianVertices, dtype='float')
         self.faces = np.array(self.faces, dtype='int')
+        if self.hasLighting:
+            self._computeUnitVectors()
         self.verticesLookup = {}
 
     """
@@ -108,6 +121,25 @@ class TerrainTopology(object):
         # Remove last point of the polygon and keep only 3 coordinates
         vertices = points[0: len(points) - 1]
         return vertices
+
+    def _computeUnitVectors(self):
+        norm = np.zeros(self.cartesianVertices.shape, dtype=self.cartesianVertices.dtype)
+        triangles = self.cartesianVertices[self.faces]
+        # Calculate the normals for all the triangle
+        n = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
+        n = self._normalizeUnitVectors(n)
+        norm[self.faces[:, 0]] += n
+        norm[self.faces[:, 1]] += n
+        norm[self.faces[:, 2]] += n
+        # Normalize again on the vertices
+        self.verticesUnitVectors = self._normalizeUnitVectors(norm)
+
+    def _normalizeUnitVectors(self, n):
+        lens = np.sqrt(n[:, 0] ** 2 + n[:, 1] ** 2 + n[:, 2] ** 2)
+        n[:, 0] /= lens
+        n[:, 1] /= lens
+        n[:, 2] /= lens
+        return n
 
     """
     Inspired by http://stackoverflow.com/questions/1709283/how-can-i-sort-a-coordinate-list-for-a-rectangle-counterclockwise
@@ -145,32 +177,62 @@ class TerrainTopology(object):
     @property
     def minLon(self):
         if isinstance(self.vertices, np.ndarray):
-            return np.min(self.uVertex)
+            return np.min(self.vertices[:, 0])
 
     @property
     def minLat(self):
         if isinstance(self.vertices, np.ndarray):
-            return np.min(self.vVertex)
+            return np.min(self.vertices[:, 1])
 
     @property
     def minHeight(self):
         if isinstance(self.vertices, np.ndarray):
-            return np.min(self.hVertex)
+            return np.min(self.vertices[:, 2])
 
     @property
     def maxLon(self):
         if isinstance(self.vertices, np.ndarray):
-            return np.max(self.uVertex)
+            return np.max(self.vertices[:, 0])
 
     @property
     def maxLat(self):
         if isinstance(self.vertices, np.ndarray):
-            return np.max(self.vVertex)
+            return np.max(self.vertices[:, 1])
 
     @property
     def maxHeight(self):
         if isinstance(self.vertices, np.ndarray):
-            return np.max(self.hVertex)
+            return np.max(self.vertices[:, 2])
+
+    @property
+    def ecefMinX(self):
+        if isinstance(self.cartesianVertices, np.ndarray):
+            return np.min(self.cartesianVertices[:, 0])
+
+    @property
+    def ecefMinY(self):
+        if isinstance(self.cartesianVertices, np.ndarray):
+            return np.min(self.cartesianVertices[:, 1])
+
+    @property
+    def ecefMinZ(self):
+        if isinstance(self.cartesianVertices, np.ndarray):
+            return np.min(self.cartesianVertices[:, 2])
+
+    @property
+    def ecefMaxX(self):
+        if isinstance(self.cartesianVertices, np.ndarray):
+            return np.max(self.cartesianVertices[:, 0])
+
+    @property
+    def ecefMaxY(self):
+        if isinstance(self.cartesianVertices, np.ndarray):
+            return np.max(self.cartesianVertices[:, 1])
+
+    @property
+    def ecefMaxZ(self):
+        if isinstance(self.cartesianVertices, np.ndarray):
+            return np.max(self.cartesianVertices[:, 2])
 
     @property
     def indexData(self):

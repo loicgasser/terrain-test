@@ -60,7 +60,7 @@ def reprojectShp(shpFilePath, args):
             inFile  = shpFilePath,
             outFile = outFile,
             err     = e
-        ))
+        ), exc_info=True)
         raise Exception(e)
 
     # TODO new version has error codes this can now be changed
@@ -116,7 +116,7 @@ def populateFeatures(args):
         bulk.commit()
         logger.info('[%s]: Commit %s features for %s.' % (pid, count, shpFile))
     except Exception as e:
-        logger.error(e)
+        logger.error(e, exc_info=True)
         raise Exception(e)
     finally:
         if session is not None:
@@ -241,7 +241,7 @@ class DB:
                 logger.error('Could not create user %(role)s: %(err)s' % dict(
                     role=self.databaseConf.user,
                     err=str(e)
-                ))
+                ), exc_info=True)
 
     def createDatabase(self):
         logger.info('Action: createDatabase()')
@@ -258,7 +258,7 @@ class DB:
                     name=self.databaseConf.name,
                     role=self.databaseConf.user,
                     err=str(e)
-                ))
+                ), exc_info=True)
 
         with self.adminConnection() as conn:
             try:
@@ -274,7 +274,7 @@ class DB:
                     name=self.databaseConf.name,
                     role=self.databaseConf.user,
                     err=str(e)
-                ))
+                ), exc_info=True)
 
     def setupDatabase(self):
         logger.info('Action: setupDatabase()')
@@ -308,7 +308,7 @@ class DB:
                     logger.error('Could not add custom functions %s to the database: %(err)s' % dict(
                         fileName=fileName,
                         err=str(e)
-                    ))
+                    ), exc_info=True)
                     logger.error(command)
             else:
                 with self.adminConnection() as conn:
@@ -327,7 +327,7 @@ class DB:
                         except Exception as e:
                             logger.error('Could not install postgis 2.1 legacy functions to the database: %(err)s' % dict(
                                 err=str(e)
-                            ))
+                            ), exc_info=True)
                             logger.error(command)
 
         del os.environ['PGPASSWORD']
@@ -425,7 +425,7 @@ class DB:
                 logger.error('Could not drop database %(name)s: %(err)s' % dict(
                     name=self.databaseConf.name,
                     err=str(e)
-                ))
+                ), exc_info=True)
 
     def dropUser(self):
         logger.info('Action: dropUser()')
@@ -440,7 +440,7 @@ class DB:
                 logger.error('Could not drop user %(role)s: %(err)s' % dict(
                     role=self.databaseConf.user,
                     err=str(e)
-                ))
+                ), exc_info=True)
 
     def create(self):
         logger.info('Action: create()')

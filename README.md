@@ -22,7 +22,12 @@ To clone use the --recursive option to get all submodules.
 
 ## Create the database and import the shapefiles in the DB
 
-    make createdb importshp
+    make createdb populate
+
+## Test a tile generated in S3
+
+    wget --header="Accept-Encoding: gzip,deflate" http://3d.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d_water/default/20151231/4326/12/4268/3110.terrain -O 12_43268_3110.terrain.gz
+    gzip -d 12_43268_3110.terrain.gz
 
 ## Interactive programming
 
@@ -51,7 +56,7 @@ To clone use the --recursive option to get all submodules.
 
 ### Copy a file to S3 from command line
 
-    aws --profile tms3d_filestorage s3 cp layer.json  s3://tms3d.geo.admin.ch/
+    aws --profile tms3d_filestorage s3 cp layer.json  s3://tms3d.geo.admin.ch/xxx/layer.json
 
 ## Create 3d-tiling instance
 

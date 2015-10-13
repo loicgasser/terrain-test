@@ -36,7 +36,8 @@ for f in shapefilesNames:
     # for now
     keyPath = f[1:3] + '/' + f[3:9] + '/' + f[9:14] + extension
     print 'Writing %s to S3' % keyPath
-    writeToS3(bucket, keyPath, compressedFile, basePath)
+    writeToS3(bucket, keyPath, compressedFile, basePath,
+        contentType=terrainFormat.getContentType())
     i += 1
     t1 = time.time()
     ti = t1 - t0

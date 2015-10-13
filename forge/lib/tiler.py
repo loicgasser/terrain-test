@@ -16,7 +16,7 @@ import forge.lib.cartesian2d as c2d
 from forge.terrain import TerrainTile
 from forge.terrain.metadata import TerrainMetadata
 from forge.terrain.topology import TerrainTopology
-from forge.models.tables import modelsPyramid
+from forge.models.tables import modelsPyramid, Lakes
 from forge.lib.boto_conn import getBucket, writeToS3, getSQS, writeSQSMessage
 from forge.lib.helpers import gzipFileObject, timestamp, transformCoordinate, createBBox
 from forge.lib.global_geodetic import GlobalGeodetic
@@ -60,7 +60,7 @@ visibility_timeout = 3600
 def createTileFromQueue(tq):
     pid = os.getpid()
     try:
-        (qName, t0, dbConfigFile) = tq
+        (qName, t0, dbConfigFile, hasLighting, hasWatermask) = tq
         sqs = getSQS()
         q = sqs.get_queue(qName)
         geodetic = GlobalGeodetic(True)
@@ -87,16 +87,16 @@ def createTileFromQueue(tq):
                 try:
                     tileXYZ = [tiles[i], tiles[i + 1], tiles[i + 2]]
                     tilebounds = geodetic.TileBounds(tileXYZ[0], tileXYZ[1], tileXYZ[2])
-                    createTile((tilebounds, tileXYZ, t0, dbConfigFile))
+                    createTile((tilebounds, tileXYZ, t0, dbConfigFile, hasLighting, hasWatermask))
                 except Exception as e:
-                    logger.error('[%s] Error while processing specific tile %s' % (pid, str(e)))
+                    logger.error('[%s] Error while processing specific tile %s' % (pid, str(e)), exc_info=True)
 
             # when successfull, we delete the message from the queue
             logger.info('[%s] Successfully treated an SQS message: %s' % (pid, body))
             q.delete_message(m)
 
     except Exception as e:
-        logger.error('[%s] Error occured during processing. Halting process ' + str(e))
+        logger.error('[%s] Error occured during processing. Halting process ' + str(e), exc_info=True)
 
 
 def createTile(tile):
@@ -104,7 +104,7 @@ def createTile(tile):
     pid = os.getpid()
 
     try:
-        (bounds, tileXYZ, t0, dbConfigFile) = tile
+        (bounds, tileXYZ, t0, dbConfigFile, hasLighting, hasWatermask) = tile
 
         db = DB(dbConfigFile)
         session = sessionmaker()(bind=db.userEngine)
@@ -141,13 +141,23 @@ def createTile(tile):
 
         # Clip using the bounds
         clippedGeometry = model.bboxClippedGeom(bounds)
-        query = session.query(
-            model.id,
-            clippedGeometry.label('clip')
-        ).filter(model.bboxIntersects(bounds))
+        if hasWatermask:
+            query = session.query(
+                model.id,
+                clippedGeometry.label('clip'),
+                Lakes.watermaskRasterize(bounds).label('watermask')
+            ).filter(model.bboxIntersects(bounds))
+        else:
+            query = session.query(
+                model.id,
+                clippedGeometry.label('clip')
+            ).filter(model.bboxIntersects(bounds))
 
-        terrainTopo = TerrainTopology()
+        watermask = []
+        terrainTopo = TerrainTopology(hasLighting=hasLighting)
         for q in query:
+            if hasWatermask:
+                watermask = q.watermask
             coords = list(to_shape(q.clip).exterior.coords)
             if q.id in cornerPts:
                 pt = cornerPts[q.id][0]
@@ -161,7 +171,7 @@ def createTile(tile):
             except Exception as e:
                 msg = '[%s] --------- ERROR ------- occured while collapsing non triangular shapes\n' % pid
                 msg += '[%s]: %s' % (pid, e)
-                logger.error(msg)
+                logger.error(msg, exc_info=True)
                 raise Exception(e)
             # Redundant coord has been remove already
             for vertices in rings:
@@ -173,13 +183,14 @@ def createTile(tile):
         if verticesLength > 0:
             terrainTopo.create()
             # Prepare terrain tile
-            terrainFormat = TerrainTile()
+            terrainFormat = TerrainTile(watermask=watermask)
             terrainFormat.fromTerrainTopology(terrainTopo, bounds=bounds)
 
             # Bytes manipulation and compression
             fileObject = terrainFormat.toStringIO()
             compressedFile = gzipFileObject(fileObject)
-            writeToS3(bucket, bucketKey, compressedFile, model.__tablename__)
+            writeToS3(bucket, bucketKey, compressedFile, model.__tablename__,
+                contentType=terrainFormat.getContentType())
             tend = time.time()
             tilecount.value += 1
             val = tilecount.value
@@ -197,7 +208,7 @@ def createTile(tile):
                 pid, bucketKey, bounds, val, total))
 
     except Exception as e:
-        logger.error(e)
+        logger.error(e, exc_info=True)
         raise Exception(e)
     finally:
         if session is not None:
@@ -209,7 +220,7 @@ def createTile(tile):
 
 def scanTerrain(tMeta, tile, session, tilecount):
     try:
-        (bounds, tileXYZ, t0, dbConfigFile) = tile
+        (bounds, tileXYZ, t0, dbConfigFile, hasLighting, hasWatermask) = tile
 
         # Get the model according to the zoom level
         model = modelsPyramid.getModelByZoom(tileXYZ[2])
@@ -219,7 +230,7 @@ def scanTerrain(tMeta, tile, session, tilecount):
         except NoResultFound as e:
             tMeta.removeTile(tileXYZ[0], tileXYZ[1], tileXYZ[2])
     except Exception as e:
-        logger.error(e)
+        logger.error(e, exc_info=True)
         raise Exception(e)
 
     tend = time.time()
@@ -245,26 +256,32 @@ class Tiles:
         self.tileMinZ = int(tmsConfig.get('Zooms', 'tileMinZ'))
         self.tileMaxZ = int(tmsConfig.get('Zooms', 'tileMaxZ'))
 
+        self.hasLighting = int(tmsConfig.get('Extensions', 'lighting'))
+        self.hasWatermask = int(tmsConfig.get('Extensions', 'watermask'))
+
         self.dbConfigFile = dbConfigFile
 
     def __iter__(self):
         zRange = range(self.tileMinZ, self.tileMaxZ + 1)
 
         for bounds, tileXYZ in grid(self.bounds, zRange, self.fullonly):
-            yield (bounds, tileXYZ, self.t0, self.dbConfigFile)
+            yield (bounds, tileXYZ, self.t0, self.dbConfigFile, self.hasLighting, self.hasWatermask)
 
 
 class QueueTiles:
 
-    def __init__(self, qName, dbConfigFile, t0, num):
+    def __init__(self, qName, dbConfigFile, tmsConfig, t0, num):
         self.t0 = t0
         self.dbConfigFile = dbConfigFile
         self.qName = qName
         self.num = num
 
+        self.hasLighting = int(tmsConfig.get('Extensions', 'lighting'))
+        self.hasWatermask = int(tmsConfig.get('Extensions', 'watermask'))
+
     def __iter__(self):
         for i in range(0, self.num):
-            yield (self.qName, self.t0, self.dbConfigFile)
+            yield (self.qName, self.t0, self.dbConfigFile, self.hasLighting, self.hasWatermask)
 
 
 class TilerManager:
@@ -326,7 +343,7 @@ class TilerManager:
             # Assure queue is kept for maximum of 14 weeks (aws limit). default would be 4 days.
             sqs.set_queue_attribute(q, 'MessageRetentionPeriod', 1209600)
         except Exception as e:
-            logger.error('Error during creation of queue:\n' + str(e))
+            logger.error('Error during creation of queue:\n' + str(e), exc_info=True)
             return
 
         if q.count() > 0:
@@ -343,8 +360,8 @@ class TilerManager:
             messagecount = 0
             msg = ''
             for tile in tiles:
-                (bounds, tileXYZ, t0, dbConfigFile) = tile
-                if not msg:
+                (bounds, tileXYZ, t0, dbConfigFile, hasLighting, hasWatermask) = tile
+                if msg:
                     msg += ','
                 msg += ('%s,%s,%s' % (str(tileXYZ[0]), str(tileXYZ[1]), str(tileXYZ[2])))
                 tcount += 1
@@ -354,11 +371,11 @@ class TilerManager:
                     tcount = 0
                     msg = ''
                 totalcount = totalcount + 1
-            if not msg:
+            if msg:
                 messagecount += 1
                 writeSQSMessage(q, msg)
         except Exception as e:
-            logger.error('Error during writing of sqs message:\n' + str(e))
+            logger.error('Error during writing of sqs message:\n' + str(e), exc_info=True)
 
         tend = time.time()
         logger.info('It took %s to create %s message in SQS gueue representing %s tiles' % (
@@ -376,7 +393,7 @@ class TilerManager:
             q = sqs.get_queue(queueName)
             sqs.delete_queue(q)
         except Exception as e:
-            logger.error('Error during deletion of queue:\n' + str(e))
+            logger.error('Error during deletion of queue:\n' + str(e), exc_info=True)
             return
 
     # Create tiles based on given Queue
@@ -391,7 +408,7 @@ class TilerManager:
         procfactor = int(self.tmsConfig.get('General', 'procfactor'))
 
         pm = PoolManager(logger=logger, factor=procfactor)
-        qtiles = QueueTiles(queueName, self.dbConfigFile, self.t0, pm.numOfProcesses())
+        qtiles = QueueTiles(queueName, self.dbConfigFile, self.tmsConfig, self.t0, pm.numOfProcesses())
 
         logger.info('Starting creation of tiles from queue %s ' % (queueName))
         pm.process(qtiles, createTileFromQueue, 1)
@@ -409,18 +426,28 @@ class TilerManager:
             q = sqs.get_queue(queueName)
             attrs = sqs.get_queue_attributes(q)
         except Exception as e:
-            logger.error('Error during statistics collection:\n' + str(e))
+            logger.error('Error during statistics collection:\n' + str(e), exc_info=True)
             return
         logger.info(attrs)
 
     def metadata(self):
         t0 = time.time()
+        basePath = self.tmsConfig.get('General', 'bucketpath')
+        baseUrls = [
+            "//terrain0.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
+            "//terrain1.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
+            "//terrain2.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
+            "//terrain3.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
+            "//terrain4.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}"
+        ]
 
         db = DB('database.cfg')
         session = sessionmaker()(bind=db.userEngine)
         tiles = Tiles(self.dbConfigFile, self.tmsConfig, t0)
         tMeta = TerrainMetadata(
-            bounds=tiles.bounds, minzoom=tiles.tileMinZ, maxzoom=tiles.tileMaxZ, useGlobalTiles=True)
+            bounds=tiles.bounds, minzoom=tiles.tileMinZ, maxzoom=tiles.tileMaxZ,
+            useGlobalTiles=True, hasLighting=tiles.hasLighting, hasWatermask=tiles.hasWatermask,
+            baseUrls=baseUrls)
 
         try:
             tilecount = 1
@@ -433,7 +460,7 @@ class TilerManager:
                 str(datetime.timedelta(seconds=tend - t0)), tilecount))
         except Exception as e:
             logger.error('An error occured during layer.json creation')
-            logger.error('%s' % e)
+            logger.error('%s' % e, exc_info=True)
             raise Exception(e)
         finally:
             session.close_all()
