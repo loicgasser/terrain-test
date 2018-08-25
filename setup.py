@@ -17,7 +17,7 @@ requires = [
         'pyproj',
         'gatilegrid>=0.1.9',
         'poolmanager>=0.0.6',
-        'quantized-mesh-tile>=0.5'
+        'quantized-mesh-tile>=0.6'
     ]
 
 setup(name='3d-forge',
