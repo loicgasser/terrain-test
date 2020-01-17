@@ -13,7 +13,7 @@ def usage():
 
 def main():
     copyKeys('1.0.0/ch.swisstopo.terrain.3d/default/20160115/4326/',
-        '1.0.0/ch.swisstopo.terrain.3d/default/20180601/4326/', range(0, 14))
+        '1.0.0/ch.swisstopo.terrain.3d/default/20190902/4326/', range(0, 14))
 
 
 if __name__ == '__main__':

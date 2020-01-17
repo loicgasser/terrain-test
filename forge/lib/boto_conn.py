@@ -28,7 +28,7 @@ log = getLogger(loggingConfig, __name__, suffix=timestamp())
 
 def _getS3Conn():
     try:
-        conn = connect_s3(profile_name=profileName)
+        conn = connect_s3()
     except Exception as e:
         raise Exception('S3: Error during connection %s' % e)
     return conn
@@ -170,7 +170,7 @@ class S3Keys:
 
 def _getSQSConn():
     try:
-        conn = boto.sqs.connect_to_region('eu-west-1', profile_name=profileName)
+        conn = boto.sqs.connect_to_region('eu-west-1')
     except Exception as e:
         raise Exception('SQS: Error during connection %s' % e)
     return conn

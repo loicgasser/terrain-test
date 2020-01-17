@@ -236,7 +236,8 @@ def createTile(tile):
 
 def scanTerrain(tMeta, tile, session, tilecount):
     try:
-        (bounds, tileXYZ, t0, dbConfigFile, hasLighting, hasWatermask) = tile
+        # TODO har
+        (bounds, tileXYZ, t0, dbConfigFile, har, hasLighting, hasWatermask) = tile
 
         # Get the model according to the zoom level
         model = modelsPyramid.getModelByZoom(tileXYZ[2])

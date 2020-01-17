@@ -1,6 +1,4 @@
 venv
-database.cfg
-tms.cfg
 logging.cfg
 3d_forge.egg-info
 *.pyc
