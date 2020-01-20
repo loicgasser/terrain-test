@@ -49,6 +49,17 @@ $ git config --global user.name "xxxx xxxx"
 $ git config --global user.email "tobias.reber@swisstopo.ch" 
 ```
 
+### Reframe
+
+Don't know why, but the tool uses Reframe.exe for the transformation of the
+coordinates. Anyhow, this tool uses a valid licence file (that is valid
+for just a year). The licence file (provided by the cadastral survey
+- ask Michael Burkhard). The one for 2020 is stored in the keepass database
+of IGEB-B under tileforge.
+
+```bash
+/root/Console/x64/geosuite.lic
+```
 
 ### 3d Forge config
 
