@@ -218,6 +218,7 @@ def createTile(tile):
                 skipcount.value += 1
                 val = skipcount.value
                 total = val + tilecount.value
+                # TODO: Who is one?
                 # One should write an empyt tile
                 logger.info(
                     '[%s] Skipping %s %s because no features found '
@@ -452,10 +453,15 @@ class TilerManager:
         t0 = time.time()
         basePath = self.tmsConfig.get('General', 'bucketpath')
         baseUrls = []
-        for i in range(0, 5):
-            url = 'https://terrain10%s.geo.admin.ch' % i
-            url += '/%s{z}/{x}/{y}.terrain?v={version}' % basePath
-            baseUrls.append(url)
+        url = 'https://terrain.dev.bgdi.ch'
+        url += '/%s{z}/{x}/{y}.terrain?v={version}' % basePath
+        baseUrls.append(url)
+        # TODO
+        #for i in range(0, 5):
+        #    url = 'https://terrain10%s.geo.admin.ch' % i
+        #    url = 'https://terrain10%s.geo.admin.ch' % i
+        #    url += '/%s{z}/{x}/{y}.terrain?v={version}' % basePath
+        #    baseUrls.append(url)
 
         db = DB('configs/terrain/database.cfg')
         tiles = TerrainTiles(self.dbConfigFile, self.tmsConfig, t0)

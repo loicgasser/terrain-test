@@ -28,8 +28,8 @@ class TerrainMetadata(_TileJSON):
         self.available = [[] for i in range(self.tileMinZoom, self.tileMaxZoom + 1)]
         self.meta = dict(
             tilejson     = kwargs.get('tilejson', '2.1.0'),
-            name         = kwargs.get('name', None),
-            description  = kwargs.get('version', 'Swisstopo terrain service'),
+            name         = kwargs.get('name', 'ch.swisstopo.terrain.3d'),
+            description  = kwargs.get('version', '2.0.0'),
             format       = kwargs.get('format', 'quantized-mesh-1.0'),
             attribution  = kwargs.get('attribution', None),
             scheme       = kwargs.get('scheme', 'tms'),
@@ -39,8 +39,8 @@ class TerrainMetadata(_TileJSON):
             bounds       = kwargs.get('bounds', [-180, -90, 180, 90]),
             projection   = kwargs.get('projection', 'EPSG:4326'),
             available    = kwargs.get('available', self.available),
-            version      = kwargs.get('version', '1.16389.0'),
-            extensions   = extensions
+            version      = kwargs.get('version', '1.0.0'),
+            #extensions   = extensions
         )
 
         self._initPyramidMetadata()
