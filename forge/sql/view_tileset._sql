@@ -1,0 +1,7 @@
+DROP MATERIALIZED VIEW public.view_tiles;
+CREATE MATERIALIZED VIEW public.view_tiles AS
+SELECT id,zoomlevel,x,y,the_geom,st_astext(the_geom),label_tsm,label_google FROM bgdi_global_geodetic_recursive(st_setsrid('BOX(5.013926957923385 45.35600133779394, 11.477436312994008 48.27502358353741)'::box2d::geometry, 4326),12);
+ALTER TABLE public.view_tiles
+  OWNER TO postgres;
+GRANT SELECT ON TABLE public.view_tiles TO "tileforge";
+GRANT ALL ON TABLE public.view_tiles TO pgkogis;
