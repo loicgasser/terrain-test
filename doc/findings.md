@@ -5,7 +5,7 @@ Weil es bei neueren Versionen von Cesium.js, ab Version 1.47, beim Darstellen de
 
 ## Testdaten
 Da es seitens Topographie zurzeit aufwendig ist, das aktuelle Terrain in TINs abzuleiten (die Datenmenge/Punktwolke ist zurzeit zu gross und zu dicht), wurden künstlich generierte Daten geliefert:
-![picture alt](img/tins.png "Extend")
+![picture alt](img/extend.png "Extend")
 
 ### Test 1
 
