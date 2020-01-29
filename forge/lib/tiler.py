@@ -39,7 +39,7 @@ visibility_timeout = 3600
 def createTileFromQueue(tq):
     pid = os.getpid()
     try:
-        (qName, t0, dbConfigFile, hasLighting, hasWatermask) = tq
+        (qName, t0, dbConfigFile, bucketBasePath, hasLighting, hasWatermask) = tq
         sqs = getSQS()
         q = sqs.get_queue(qName)
         geodetic = getTileGrid(4326)(tmsCompatible=True)
@@ -78,7 +78,7 @@ def createTileFromQueue(tq):
                     )
                     createTile(
                         (tilebounds, tileXYZ, t0, dbConfigFile,
-                         hasLighting, hasWatermask)
+                         bucketBasePath, hasLighting, hasWatermask)
                     )
                 except Exception as e:
                     logger.error(
@@ -356,7 +356,7 @@ class TilerManager:
             msg = ''
             for tile in tiles:
                 (bounds, tileXYZ, t0, dbConfigFile,
-                 hasLighting, hasWatermask) = tile
+                 bucketBasePath, hasLighting, hasWatermask) = tile
                 if msg:
                     msg += ','
                 msg += ('%s,%s,%s' % (
