@@ -34,6 +34,11 @@ Die Topographie wollte wissen, ob die Lieferung der TINs auch im Format fbx (ans
 Wie von Guillaume Beraudo von Camptocamp vermutet hat, führen die Terrain Tiles, die teilweise ohne definierten Werten (NULL, resp. NaN) daherkommen, zu Ceslum.js Fehlern. Diese Tiles befinden sich am Rand der Schweizergrenze.
 Schränkt man beim jetzigen produktiven Datensatz den Extend so ein, dass nur Tiles ohne fehlenden Werten erscheinen, funktioniert der Viewer einwandfrei: https://codepen.io/rebert/pen/yLyGaGd
 
+### Herunterladen eines für Cesium > 1.47 korrupten Tiles
+```bash
+curl 'https://terrain0.geo.admin.ch/1.0.0/ch.swisstopo.terrain.3d/default/20180601/4326/11/2132/1546.terrain?v=1.0.0' -H 'Accept: application/vnd.quantized-mesh,application/octet-stream;q=0.9,*/*;q=0.01' -H 'Referer: http://localhost:8080/Apps/bisect.html' -H 'Origin: http://localhost:8080' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/75.0.3770.90 Chrome/75.0.3770.90 Safari/537.36' --compressed > 11_2132_1546.terrain
+```
+
 ## Ergebnis
 Damit Cesium > 1.47 mit unserem momentanen Terrain ohne Hacks im JS-Code direkt funktioniert, muss das Terrain neu generiert werden. Wie von Wobei dieses lückenlos in allen Zoomstufen denselben rechteckigen Extend abdecken muss.
 Das Produkt DHM25_EuroDEM beinhaltet beispielsweise Höheninformationen weit über die Landesgrenze hinaus und könnte zum Auffüllen über die Landesgrenze hinaus verwendet werden.
