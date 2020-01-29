@@ -43,10 +43,10 @@ Die grösse des Rechtecks für die neue Datenlieferung muss noch festgelegt werd
 
 In WGS84 z.B.:
 
-ymin: 45.7470703125
-xmin: 5.80078125
-xmax: 11.0302734375
-ymax: 47.900390625
+* ymin: 45.7470703125
+* xmin: 5.80078125
+* xmax: 11.0302734375
+* ymax: 47.900390625
 
 Der hier vorgeschlagene Extend ist in der oberen Abbildung 2 als grünes Rechteck eingezeichnet.
 
